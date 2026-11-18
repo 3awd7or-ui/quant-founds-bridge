@@ -1,0 +1,49 @@
+//@version=6
+indicator("QUANT FOUNDS — TradingView Connector v1.0", overlay=true, max_labels_count=100)
+
+// --- الإعدادات ---
+secretToken  = input.string("QF_SECRET_2026", "رمز الحماية (Secret Token)")
+emaFastLen   = input.int(20, "EMA السريع")
+emaSlowLen   = input.int(50, "EMA البطيء")
+atrLen       = input.int(14, "طول ATR")
+swingLen     = input.int(5,  "حساسية القمم والقيعان (Liquidity)")
+requireClose = input.bool(true, "منع إعادة الرسم (إغلاق الشمعة فقط)")
+
+// --- 1. الاتجاه والتقلب ---
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+atrVal  = ta.atr(atrLen)
+trendUp = emaFast > emaSlow and close > emaFast
+trendDn = emaFast < emaSlow and close < emaFast
+
+// --- 2. السيولة (Liquidity Sweep) ---
+prevLow  = ta.lowest(low[1], swingLen)
+prevHigh = ta.highest(high[1], swingLen)
+sslSweep = low < prevLow and close > prevLow
+bslSweep = high > prevHigh and close < prevHigh
+
+// --- 3. قرار الإشارة (No-Repaint) ---
+isConfirmedBar = requireClose ? barstate.isconfirmed : true
+buySignal  = isConfirmedBar and trendUp and sslSweep
+sellSignal = isConfirmedBar and trendDn and bslSweep
+
+if buySignal
+    longSL  = low - atrVal * 0.5
+    longTP1 = close + (close - longSL) * 1.5
+    longTP2 = close + (close - longSL) * 2.5
+    longTP3 = close + (close - longSL) * 4.0
+    payload = '{"token":"' + secretToken + '","engine_id":"QF-PINE-v1.0","symbol":"' + syminfo.tickerid + '","timeframe":"' + timeframe.period + '","direction":"BUY","state":"ENTRY_READY","score":86,"entry":' + str.tostring(close) + ',"sl":' + str.tostring(longSL) + ',"tp1":' + str.tostring(longTP1) + ',"tp2":' + str.tostring(longTP2) + ',"tp3":' + str.tostring(longTP3) + ',"source_mode":"estimated_candles","evidence":["SSL Sweep مؤكد","اتجاه صاعد EMA 20/50","إغلاق شمعة بدون إعادة رسم"]}'
+    alert(payload, alert.freq_once_per_bar_close)
+    label.new(bar_index, low, "QF BUY", style=label.style_label_up, color=color.teal, textcolor=color.white)
+
+if sellSignal
+    shortSL  = high + atrVal * 0.5
+    shortTP1 = close - (shortSL - close) * 1.5
+    shortTP2 = close - (shortSL - close) * 2.5
+    shortTP3 = close - (shortSL - close) * 4.0
+    payload = '{"token":"' + secretToken + '","engine_id":"QF-PINE-v1.0","symbol":"' + syminfo.tickerid + '","timeframe":"' + timeframe.period + '","direction":"SELL","state":"ENTRY_READY","score":84,"entry":' + str.tostring(close) + ',"sl":' + str.tostring(shortSL) + ',"tp1":' + str.tostring(shortTP1) + ',"tp2":' + str.tostring(shortTP2) + ',"tp3":' + str.tostring(shortTP3) + ',"source_mode":"estimated_candles","evidence":["BSL Sweep مؤكد","اتجاه هابط EMA 20/50","إغلاق شمعة بدون إعادة رسم"]}'
+    alert(payload, alert.freq_once_per_bar_close)
+    label.new(bar_index, high, "QF SELL", style=label.style_label_down, color=color.red, textcolor=color.white)
+
+plot(emaFast, "EMA Fast", color=color.new(color.aqua, 20))
+plot(emaSlow, "EMA Slow", color=color.new(color.orange, 20))

@@ -1,0 +1,2062 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QUANT FOUNDS — لوحة التحليل الكمي والربط مع TradingView</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Cairo', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            terminal: {
+              bg: '#070b14',
+              panel: '#0e1525',
+              card: '#131c31',
+              border: '#1e2c48',
+              accent: '#06b6d4',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #070b14;
+      color: #e2e8f0;
+      font-family: 'Cairo', 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+    .font-num {
+      font-family: 'JetBrains Mono', 'Inter', monospace;
+      font-variant-numeric: tabular-nums;
+      direction: ltr;
+      display: inline-block;
+    }
+    .glass-card {
+      background: linear-gradient(180deg, rgba(19, 28, 49, 0.92) 0%, rgba(14, 21, 37, 0.96) 100%);
+      border: 1px solid rgba(30, 44, 72, 0.9);
+      border-radius: 0.75rem;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #0b1120;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #233554;
+      border-radius: 9999px;
+    }
+    .tab-btn.active {
+      background: rgba(6, 182, 212, 0.14);
+      color: #22d3ee;
+      border-color: rgba(34, 211, 238, 0.45);
+    }
+    .pulse-dot {
+      animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.92); }
+    }
+    .state-step.active-step {
+      border-color: #22d3ee;
+      background: rgba(6, 182, 212, 0.18);
+      color: #cffafe;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+    }
+    .state-step.blocked-step {
+      border-color: #f43f5e;
+      background: rgba(244, 63, 94, 0.18);
+      color: #ffe4e6;
+    }
+    input[type="range"] {
+      accent-color: #06b6d4;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Toast Notification -->
+  <div id="toast-container" class="fixed bottom-4 left-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- Kill Switch Banner -->
+  <div id="kill-switch-banner" class="hidden bg-rose-950/95 border-b border-rose-500/60 px-4 py-2 text-center text-sm font-bold text-rose-200 flex items-center justify-center gap-3">
+    <span>⚠️ وضع الإيقاف الطارئ (KILL SWITCH) مفعّل — جميع إشارات الدخول والتنفيذ محظورة لحماية رأس المال</span>
+    <button id="banner-disable-kill" class="px-2.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-xs transition">إعادة التفعيل الآمن</button>
+  </div>
+
+  <!-- Top Header & Navigation -->
+  <header class="sticky top-0 z-40 bg-[#070b14]/95 backdrop-blur border-b border-terminal-border">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M14 7h7v7" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-wide text-white leading-tight">QUANT FOUNDS</h1>
+            <span class="px-1.5 py-0.5 text-[10px] font-num font-semibold rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">v1.0</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-none mt-0.5">لوحة التحليل الكمي والسيولة • الربط المباشر مع TradingView</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1.5 overflow-x-auto py-0.5" aria-label="الأقسام الرئيسية">
+        <button data-tab="terminal" class="tab-btn active px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/70 transition whitespace-nowrap">
+          الشارت والقرار
+        </button>
+        <button data-tab="engines" class="tab-btn px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/70 transition whitespace-nowrap">
+          المحركات والفلاتر
+        </button>
+        <button data-tab="tv-bridge" class="tab-btn px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/70 transition whitespace-nowrap">
+          ربط TradingView
+        </button>
+        <button data-tab="risk-audit" class="tab-btn px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg border border-transparent text-slate-300 hover:text-white hover:bg-slate-800/70 transition whitespace-nowrap">
+          المخاطر والسجل
+        </button>
+      </nav>
+
+      <!-- Live Status & Kill Switch -->
+      <div class="flex items-center gap-2">
+        <div id="data-quality-pill" class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+          <span id="data-quality-label">جودة البيانات: موثوقة</span>
+        </div>
+        <div class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-slate-800/80 text-slate-300 border border-slate-700">
+          <span class="text-slate-400">UTC</span>
+          <span id="utc-clock" class="font-num font-semibold text-cyan-300">--:--:--</span>
+        </div>
+        <button id="kill-switch-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-500/50 bg-rose-500/10 text-rose-300 hover:bg-rose-600 hover:text-white transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+          </svg>
+          <span id="kill-switch-text">Kill Switch</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Asset, Timeframe & Session Toolbar -->
+    <div class="border-t border-terminal-border/80 bg-[#0b1120]/90">
+      <div class="max-w-[1600px] mx-auto px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2.5">
+        <!-- Quick Assets -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] text-slate-400 font-semibold ml-1">الأصل:</span>
+          <button data-symbol="OANDA:XAUUSD" class="asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 transition">XAUUSD</button>
+          <button data-symbol="BINANCE:BTCUSDT" class="asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">BTCUSDT</button>
+          <button data-symbol="FX:EURUSD" class="asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">EURUSD</button>
+          <button data-symbol="NASDAQ:NDX" class="asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">NAS100</button>
+          <button data-symbol="CAPITALCOM:US30" class="asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">US30</button>
+          <div class="flex items-center gap-1 mr-1">
+            <input id="custom-symbol-input" type="text" placeholder="رمز مخصص (مثل BINANCE:ETHUSDT)" class="w-40 sm:w-48 px-2.5 py-1 text-xs rounded-md bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-num" />
+            <button id="load-custom-symbol-btn" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 transition">تحميل</button>
+          </div>
+        </div>
+
+        <!-- Timeframes & Active Session -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center gap-1">
+            <span class="text-[11px] text-slate-400 font-semibold ml-1">الفريم:</span>
+            <button data-tf="1" class="tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">1m</button>
+            <button data-tf="5" class="tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">5m</button>
+            <button data-tf="15" class="tf-btn px-2 py-1 rounded text-xs font-num bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 transition">15m</button>
+            <button data-tf="60" class="tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">1H</button>
+            <button data-tf="240" class="tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">4H</button>
+            <button data-tf="D" class="tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">1D</button>
+          </div>
+          <div id="session-badge" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+            الجلسة: تداخل لندن / نيويورك
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-5 py-4 space-y-4">
+
+    <!-- ==================== TAB 1: TERMINAL & CHART ==================== -->
+    <section id="tab-terminal" class="tab-panel space-y-4">
+      <!-- Top Signal Lifecycle & Hard Gate Strip -->
+      <div class="glass-card p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <div class="text-[11px] text-slate-400">حالة قرار النظام</div>
+            <div id="decision-headline" class="text-base sm:text-lg font-extrabold text-emerald-400 flex items-center gap-2">
+              <span>BUY ENTRY_READY — جاهز للدخول</span>
+            </div>
+          </div>
+          <div class="h-8 w-px bg-slate-800 hidden sm:block"></div>
+          <div class="text-xs space-y-0.5">
+            <div class="text-slate-400">معرف الإشارة: <span id="signal-id-display" class="font-num text-cyan-300 font-semibold">QF-20261118-0104</span></div>
+            <div class="text-slate-400">عدم إعادة الرسم: <span id="no-repaint-badge" class="text-emerald-300 font-semibold">مفعّل (إغلاق الشمعة)</span></div>
+          </div>
+        </div>
+
+        <!-- State Machine Stepper -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0" id="state-machine-bar">
+          <span data-state="WATCH" class="state-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700 text-slate-400">WATCH</span>
+          <span class="text-slate-600 text-xs">←</span>
+          <span data-state="SETUP" class="state-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700 text-slate-400">SETUP</span>
+          <span class="text-slate-600 text-xs">←</span>
+          <span data-state="CONFIRMED" class="state-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700 text-slate-400">CONFIRMED</span>
+          <span class="text-slate-600 text-xs">←</span>
+          <span data-state="ENTRY_READY" class="state-step active-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700">ENTRY_READY</span>
+          <span class="text-slate-600 text-xs">←</span>
+          <span data-state="ACTIVE" class="state-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700 text-slate-400">ACTIVE</span>
+          <span class="text-slate-600 text-xs">←</span>
+          <span data-state="EXITED" class="state-step px-2.5 py-1 rounded-md text-[11px] font-num border border-slate-700 text-slate-400">EXITED</span>
+        </div>
+      </div>
+
+      <!-- Hard Gate Warning Banner (shown when blocked) -->
+      <div id="hard-gate-alert" class="hidden rounded-xl border border-rose-500/50 bg-rose-950/50 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-rose-400 text-lg leading-none mt-0.5">⛔</span>
+          <div>
+            <div class="text-sm font-bold text-rose-200">بوابة الامتناع عن التداول (No-Trade Gate) تمنع التنفيذ</div>
+            <div id="hard-gate-reasons" class="text-xs text-rose-300/90 mt-0.5"></div>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 rounded text-xs font-semibold bg-rose-500/20 text-rose-200 border border-rose-500/40 self-start sm:self-center">أولوية المخاطر</span>
+      </div>
+
+      <!-- Primary Grid: Live TradingView Chart + Right Decision Sidebar -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <!-- TradingView Live Chart Container (8 cols) -->
+        <div class="xl:col-span-8 flex flex-col gap-4">
+          <div class="glass-card overflow-hidden flex flex-col">
+            <div class="px-3.5 py-2.5 border-b border-terminal-border flex flex-wrap items-center justify-between gap-2 bg-[#0b1222]">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 pulse-dot"></span>
+                <span class="text-xs sm:text-sm font-bold text-white">شارت TradingView المباشر</span>
+                <span id="chart-symbol-label" class="font-num text-xs px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">OANDA:XAUUSD • 15m</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="toggle-studies-btn" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                  مؤشرات EMA + RSI + VWAP: مفعّلة
+                </button>
+                <button id="reload-chart-btn" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 transition">
+                  تحديث الشارت
+                </button>
+              </div>
+            </div>
+            <!-- Fixed height responsive container for TradingView Widget -->
+            <div id="tv-chart-wrapper" class="relative w-full h-[460px] sm:h-[540px] bg-[#0a0f1c]">
+              <div id="tradingview-widget-host" class="w-full h-full"></div>
+            </div>
+          </div>
+
+          <!-- Market Intelligence & MTF Matrix Strip -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- MTF Alignment Card -->
+            <div class="glass-card p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-white">توافق الفريمات (MTF Intelligence)</h2>
+                <span id="mtf-sync-status" class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">توافق مرتفع</span>
+              </div>
+              <div id="mtf-grid" class="grid grid-cols-4 gap-2 text-center"></div>
+              <p class="text-[11px] text-slate-400 mt-3 leading-relaxed">
+                يعتمد الفريم الأعلى على الشموع المغلقة فقط لمنع إعادة الرسم (No-Repaint).
+              </p>
+            </div>
+
+            <!-- Liquidity, Structure & Order Flow Summary -->
+            <div class="glass-card p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-white">الهيكل، السيولة وتدفق الأوامر</h2>
+                <span id="orderflow-mode-badge" class="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold">Order Flow: تقديري</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5 text-xs">
+                <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div class="text-slate-400 text-[11px]">حالة السوق (Regime)</div>
+                  <div id="summary-regime" class="font-bold text-cyan-300 mt-0.5">Trending — اتجاهي</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div class="text-slate-400 text-[11px]">البنية السعرية (SMC)</div>
+                  <div id="summary-structure" class="font-bold text-emerald-300 mt-0.5">BOS صاعد + OB نشط</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div class="text-slate-400 text-[11px]">السيولة (Liquidity)</div>
+                  <div id="summary-liquidity" class="font-bold text-amber-300 mt-0.5">SSL Sweep مؤكد</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div class="text-slate-400 text-[11px]">دلتا الحجم (Delta)</div>
+                  <div id="summary-orderflow" class="font-bold text-emerald-300 mt-0.5">ضغط شراء +64%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Decision & Trade Plan Sidebar (4 cols) -->
+        <div class="xl:col-span-4 flex flex-col gap-4">
+          <!-- Opportunity Score Card -->
+          <div class="glass-card p-4">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h2 class="text-sm font-bold text-white">درجة جودة الفرصة (Opportunity Score)</h2>
+                <p class="text-[11px] text-slate-400">درجة توافق الأدلة (ليست ضماناً إحصائياً قبل المعايرة)</p>
+              </div>
+              <span id="score-badge" class="font-num text-2xl font-extrabold text-emerald-400">84<span class="text-xs text-slate-400">/100</span></span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden mb-3">
+              <div id="score-bar" class="h-full rounded-full bg-gradient-to-l from-emerald-400 to-cyan-500 transition-all duration-300" style="width: 84%"></div>
+            </div>
+
+            <!-- Supporting vs Opposing Evidence -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div class="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/25">
+                <div class="font-bold text-emerald-300 mb-1.5">العوامل الداعمة</div>
+                <ul id="evidence-for-list" class="space-y-1 text-slate-300 text-[11px] leading-relaxed"></ul>
+              </div>
+              <div class="p-2.5 rounded-lg bg-rose-950/30 border border-rose-500/25">
+                <div class="font-bold text-rose-300 mb-1.5">المخاطر / الإبطال</div>
+                <ul id="evidence-against-list" class="space-y-1 text-slate-300 text-[11px] leading-relaxed"></ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution & Trade Plan Card -->
+          <div class="glass-card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-bold text-white">خطة الصفقة والتنفيذ (Execution Plan)</h2>
+              <span id="trade-direction-pill" class="px-2 py-0.5 rounded text-xs font-num font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">LONG / BUY</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+              <div class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                <div class="text-slate-400 text-[11px]">سعر الدخول (Entry)</div>
+                <div id="plan-entry" class="font-num text-sm font-bold text-white mt-0.5">2642.50</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-rose-950/30 border border-rose-500/30">
+                <div class="text-rose-300 text-[11px]">وقف الخسارة (Stop Loss)</div>
+                <div id="plan-sl" class="font-num text-sm font-bold text-rose-300 mt-0.5">2634.00</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-500/25">
+                <div class="text-emerald-300 text-[11px]">الهدف الأول TP1 (40%)</div>
+                <div id="plan-tp1" class="font-num text-sm font-bold text-emerald-300 mt-0.5">2655.25</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-500/25">
+                <div class="text-emerald-300 text-[11px]">الهدف الثاني TP2 (40%)</div>
+                <div id="plan-tp2" class="font-num text-sm font-bold text-emerald-300 mt-0.5">2668.00</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-500/25">
+                <div class="text-emerald-300 text-[11px]">الهدف الثالث TP3 (20%)</div>
+                <div id="plan-tp3" class="font-num text-sm font-bold text-emerald-300 mt-0.5">2685.00</div>
+              </div>
+              <div class="p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-500/30">
+                <div class="text-cyan-300 text-[11px]">العائد/المخاطرة الصافي</div>
+                <div id="plan-rr" class="font-num text-sm font-bold text-cyan-300 mt-0.5">1 : 2.85</div>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs mb-3">
+              <div>
+                <div class="text-slate-400 text-[11px]">حجم المركز المقترح (Position Size)</div>
+                <div id="plan-size" class="font-num text-sm font-bold text-amber-300 mt-0.5">0.24 Lots ($200 مخاطرة)</div>
+              </div>
+              <div class="text-left">
+                <div class="text-slate-400 text-[11px]">نقل الوقف (Break-Even)</div>
+                <div class="text-slate-200 font-semibold mt-0.5">بعد TP1</div>
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <button id="simulate-paper-entry-btn" class="flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-md shadow-emerald-900/40">
+                تسجيل صفقة تجريبية (Paper)
+              </button>
+              <button id="invalidate-signal-btn" class="py-2 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white border border-slate-700 transition">
+                إبطال الإشارة
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Alerts Feed -->
+          <div class="glass-card p-4 flex-1 flex flex-col">
+            <div class="flex items-center justify-between mb-2.5">
+              <h2 class="text-sm font-bold text-white">التنبيهات الأخيرة (Alert Engine)</h2>
+              <span id="alert-count-badge" class="font-num text-[11px] px-2 py-0.5 rounded bg-slate-800 text-cyan-300">4</span>
+            </div>
+            <div id="alerts-feed" class="space-y-2 max-h-56 overflow-y-auto custom-scroll pl-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: ENGINES & FILTERS ==================== -->
+    <section id="tab-engines" class="tab-panel hidden space-y-4">
+      <!-- 9 Analysis Engines Grid -->
+      <div class="glass-card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 class="text-base font-bold text-white">محركات التحليل التسعة (Analysis Engines — الواجهة الموحدة)</h2>
+            <p class="text-xs text-slate-400">كل محرك يعيد كائناً موحداً: state، score، evidence، invalidations، source_mode</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+              <input id="toggle-news-blackout" type="checkbox" class="accent-rose-500" />
+              <span>محاكاة نافذة خبر عالي التأثير (CPI)</span>
+            </label>
+            <label class="text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+              <input id="toggle-data-fault" type="checkbox" class="accent-amber-500" />
+              <span>محاكاة انقطاع البيانات</span>
+            </label>
+          </div>
+        </div>
+        <div id="engines-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- 13 Independent Filters & 8 Score Weights -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- 13 Independent Filters -->
+        <div class="lg:col-span-7 glass-card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">محرك الفلاتر المستقلة (13 Filter Engine)</h2>
+              <p class="text-[11px] text-slate-400">يمكن تعطيل أي فلتر دون كسر بقية النظام ومراقبة أثره الفوري على القرار</p>
+            </div>
+            <button id="reset-filters-btn" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">إعادة الافتراضي</button>
+          </div>
+          <div id="filters-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- 8 Configurable Weights -->
+        <div class="lg:col-span-5 glass-card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">أوزان درجة جودة الفرصة (Score Weights)</h2>
+              <p class="text-[11px] text-slate-400">الأوزان الابتدائية للتجربة والمعايرة (إجمالي معياري: <span id="total-weight-display" class="font-num text-cyan-300 font-bold">100</span>)</p>
+            </div>
+            <button id="reset-weights-btn" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">تصفير</button>
+          </div>
+          <div id="weights-list" class="space-y-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: TRADINGVIEW BRIDGE (PINE v6 & WEBHOOK) ==================== -->
+    <section id="tab-tv-bridge" class="tab-panel hidden space-y-4">
+      <!-- Live Webhook Server Bridge Connector -->
+      <div class="glass-card p-4 border-cyan-500/40">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <span>الربط المباشر بخادم استقبال تنبيهات TradingView (Live Webhook Bridge)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">اربط اللوحة بخادم FastAPI المرفق في حزمة الربط لاستقبال إشارات TradingView Alerts تلقائياً عبر HTTPS</p>
+          </div>
+          <span id="bridge-status-pill" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+            ● غير متصل بالخادم (وضع المحاكاة المحلي)
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end text-xs">
+          <div class="md:col-span-5">
+            <label for="bridge-url-input" class="block text-slate-300 font-semibold mb-1">رابط خادم الربط (HTTPS URL)</label>
+            <input id="bridge-url-input" type="url" placeholder="https://your-quant-founds.onrender.com" class="w-full px-3 py-2 rounded-lg bg-[#070b14] border border-slate-700 text-cyan-200 font-num focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div class="md:col-span-3">
+            <label for="bridge-token-input" class="block text-slate-300 font-semibold mb-1">رمز الحماية (Secret Token)</label>
+            <input id="bridge-token-input" type="password" value="QF_SECRET_2026" class="w-full px-3 py-2 rounded-lg bg-[#070b14] border border-slate-700 text-slate-200 font-num focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div class="md:col-span-2">
+            <label for="bridge-interval-select" class="block text-slate-300 font-semibold mb-1">معدل التحديث</label>
+            <select id="bridge-interval-select" class="w-full px-2.5 py-2 rounded-lg bg-[#070b14] border border-slate-700 text-slate-200 font-num focus:outline-none focus:border-cyan-500">
+              <option value="3000">كل 3 ثوانٍ</option>
+              <option value="5000" selected>كل 5 ثوانٍ</option>
+              <option value="10000">كل 10 ثوانٍ</option>
+              <option value="30000">كل 30 ثانية</option>
+            </select>
+          </div>
+          <div class="md:col-span-2 flex gap-1.5">
+            <button id="bridge-connect-btn" class="flex-1 py-2 px-3 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition">
+              تفعيل الربط
+            </button>
+            <button id="bridge-test-btn" class="py-2 px-2.5 rounded-lg font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="فحص الاتصال">
+              فحص
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] text-slate-300">
+          <div class="p-2 rounded bg-slate-900/70 border border-slate-800">
+            <span class="text-cyan-400 font-bold">1. تشغيل الخادم:</span> ارفع ملفات الحزمة المرفقة (<span class="font-num text-cyan-200">server.py</span>) على Render أو Railway أو شغّلها محلياً مع ngrok لتحصل على رابط HTTPS.
+          </div>
+          <div class="p-2 rounded bg-slate-900/70 border border-slate-800">
+            <span class="text-cyan-400 font-bold">2. إعداد TradingView:</span> أضف كود Pine Script v6 أدناه، أنشئ Alert، وضع الرابط <span class="font-num text-emerald-300">/webhook/tradingview</span> في خانة Webhook URL.
+          </div>
+          <div class="p-2 rounded bg-slate-900/70 border border-slate-800">
+            <span class="text-cyan-400 font-bold">3. تفعيل الاستقبال:</span> أدخل الرابط أعلاه واضغط <strong>تفعيل الربط</strong> لتستقبل اللوحة الإشارات الحية تلقائياً (<span id="bridge-last-sync" class="font-num text-slate-400">آخر مزامنة: --</span>).
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Webhook JSON Injector & Live Tester -->
+        <div class="lg:col-span-5 glass-card p-4 flex flex-col gap-3">
+          <div>
+            <h2 class="text-base font-bold text-white">مستقبل تنبيهات TradingView (Webhook JSON)</h2>
+            <p class="text-xs text-slate-400 mt-0.5">اختبر تدفق الإشارات من TradingView Alert مباشرة إلى محرك القرار والمخاطر في اللوحة</p>
+          </div>
+
+          <!-- Preset Scenarios -->
+          <div class="space-y-1.5">
+            <div class="text-xs font-semibold text-slate-300">سيناريوهات جاهزة للاختبار:</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button data-preset="buy_confirmed" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition text-right">
+                ✅ BUY مؤكد (Sweep + BOS)
+              </button>
+              <button data-preset="sell_setup" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition text-right">
+                ⏳ SELL إعداد (FVG + CHOCH)
+              </button>
+              <button data-preset="news_block" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition text-right">
+                📰 منع بسبب خبر اقتصادي
+              </button>
+              <button data-preset="low_rr" class="preset-btn px-2.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition text-right">
+                ⚖️ رفض بسبب ضعف R:R
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label for="webhook-json-input" class="block text-xs font-semibold text-slate-300 mb-1">حمولة JSON الواردة من TradingView Alert:</label>
+            <textarea id="webhook-json-input" rows="11" class="w-full p-3 rounded-lg bg-[#070b14] border border-slate-700 text-cyan-200 font-num text-xs focus:outline-none focus:border-cyan-500 custom-scroll" spellcheck="false"></textarea>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="inject-webhook-btn" class="flex-1 py-2.5 px-4 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition">
+              معالجة الإشارة وتحديث اللوحة
+            </button>
+            <button id="copy-json-btn" class="py-2.5 px-3 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+              نسخ JSON
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            ملاحظة: في بيئة الإنتاج الحية، يرسل TradingView هذا الـ JSON إلى خادم Webhook (مثل Python FastAPI) الذي يغذّي هذه الواجهة ويسجل البيانات في قاعدة بيانات.
+          </p>
+        </div>
+
+        <!-- Ready-to-Use Pine Script v6 Connector -->
+        <div class="lg:col-span-7 glass-card p-4 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-bold text-white">كود الربط الرسمي — TradingView Pine Script v6</h2>
+              <p class="text-xs text-slate-400">انسخ الكود وأضفه في Pine Editor على TradingView لإرسال تنبيهات غير معادة الرسم (No-Repaint)</p>
+            </div>
+            <button id="copy-pine-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-500/20 hover:bg-cyan-600 text-cyan-200 hover:text-white border border-cyan-500/40 transition flex items-center gap-1.5">
+              <span>نسخ كود Pine Script v6</span>
+            </button>
+          </div>
+          <pre id="pine-script-code" class="flex-1 p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] sm:text-xs font-num text-emerald-300 overflow-x-auto max-h-[460px] custom-scroll leading-relaxed" dir="ltr"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: RISK ENGINE, QUANT & AUDIT LOG ==================== -->
+    <section id="tab-risk-audit" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Risk Engine Controls -->
+        <div class="lg:col-span-5 glass-card p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-white">محرك إدارة المخاطر (Risk Engine)</h2>
+              <p class="text-xs text-slate-400">السلطة النهائية على قرار الدخول وحساب حجم المركز</p>
+            </div>
+            <span id="risk-status-pill" class="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">ضمن الحدود الآمنة</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <label for="risk-capital" class="block text-slate-400 mb-1">رأس المال ($)</label>
+              <input id="risk-capital" type="number" min="100" step="500" value="20000" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+            <div>
+              <label for="risk-percent" class="block text-slate-400 mb-1">المخاطرة للصفقة (%)</label>
+              <input id="risk-percent" type="number" min="0.1" max="10" step="0.1" value="1.0" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+            <div>
+              <label for="risk-daily-limit" class="block text-slate-400 mb-1">حد الخسارة اليومي (%)</label>
+              <input id="risk-daily-limit" type="number" min="0.5" max="20" step="0.5" value="3.0" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+            <div>
+              <label for="risk-daily-used" class="block text-slate-400 mb-1">الخسارة اليومية الحالية (%)</label>
+              <input id="risk-daily-used" type="number" min="0" max="20" step="0.2" value="0.8" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+            <div>
+              <label for="risk-min-rr" class="block text-slate-400 mb-1">الحد الأدنى للعائد/المخاطرة</label>
+              <input id="risk-min-rr" type="number" min="1.0" max="10" step="0.1" value="2.0" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+            <div>
+              <label for="risk-spread-cost" class="block text-slate-400 mb-1">تكلفة السبريد والانزلاق ($)</label>
+              <input id="risk-spread-cost" type="number" min="0" max="50" step="0.5" value="2.5" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-num focus:border-cyan-500 focus:outline-none" />
+            </div>
+          </div>
+
+          <!-- Daily Drawdown Progress -->
+          <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1.5">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">استهلاك حد الخسارة اليومي</span>
+              <span id="daily-loss-ratio" class="font-num font-bold text-cyan-300">0.8% / 3.0%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div id="daily-loss-bar" class="h-full rounded-full bg-cyan-500 transition-all duration-300" style="width: 26%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quant Backtest & Out-of-Sample Metrics -->
+        <div class="lg:col-span-7 glass-card p-4 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-bold text-white">المحرك الكمي ونتائج الاختبار التجريبي (Backtest & OOS)</h2>
+              <p class="text-xs text-slate-400">بيانات نموذجية للتحقق الهيكلي (شاملة العمولة والانزلاق — ليست ضماناً للأداء المستقبلي)</p>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">Walk-Forward: مستقر</span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+              <div class="text-[11px] text-slate-400">Profit Factor</div>
+              <div class="font-num text-base font-bold text-emerald-400 mt-0.5">1.74</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+              <div class="text-[11px] text-slate-400">Expectancy (R)</div>
+              <div class="font-num text-base font-bold text-cyan-300 mt-0.5">+0.38R</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+              <div class="text-[11px] text-slate-400">Max Drawdown</div>
+              <div class="font-num text-base font-bold text-rose-400 mt-0.5">-6.4%</div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+              <div class="text-[11px] text-slate-400">Win Rate (OOS)</div>
+              <div class="font-num text-base font-bold text-amber-300 mt-0.5">48.5%</div>
+            </div>
+          </div>
+
+          <div class="relative h-56 w-full">
+            <canvas id="equity-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signal & Audit Log Table -->
+      <div class="glass-card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-base font-bold text-white">سجل الإشارات والتدقيق (Audit Log)</h2>
+            <p class="text-xs text-slate-400">يحفظ جميع الإشارات المقبولة والمرفوضة مع السبب والدرجة وإصدار الإعدادات</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="log-filter-select" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 border border-slate-700 text-slate-200 focus:outline-none focus:border-cyan-500">
+              <option value="ALL">جميع الحالات</option>
+              <option value="ENTRY_READY">جاهز / منفذ</option>
+              <option value="BLOCKED">مرفوض (بوابة مخاطر)</option>
+              <option value="INVALIDATED">مبطل</option>
+            </select>
+            <button id="export-csv-btn" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition">
+              تصدير CSV
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-xs text-right border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400">
+                <th class="py-2 px-3">معرف الإشارة</th>
+                <th class="py-2 px-3">الوقت (UTC)</th>
+                <th class="py-2 px-3">الأصل / الفريم</th>
+                <th class="py-2 px-3">الاتجاه</th>
+                <th class="py-2 px-3">الدرجة</th>
+                <th class="py-2 px-3">الحالة</th>
+                <th class="py-2 px-3">السبب / بوابة المنع</th>
+              </tr>
+            </thead>
+            <tbody id="audit-log-body" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer Disclaimer -->
+  <footer class="border-t border-terminal-border py-3 px-4 text-center text-[11px] text-slate-500">
+    QUANT FOUNDS v1.0 — نظام تحليل وتخطيط كمي للتشغيل التجريبي والاختبار التاريخي، وليس توصية استثمارية أو ضماناً للربح.
+  </footer>
+
+  <script>
+    // ==================== STATE & BLUEPRINT DATA MODEL ====================
+    const ASSET_PROFILES = {
+      'OANDA:XAUUSD': {
+        label: 'XAUUSD (الذهب)',
+        direction: 'BUY',
+        state: 'ENTRY_READY',
+        regime: 'Trending — اتجاهي صاعد',
+        structure: 'BOS صاعد + Bullish OB نشط',
+        liquidity: 'SSL Sweep مؤكد (2636.20)',
+        orderflow: 'ضغط شراء +64% (تقديري)',
+        orderflowMode: 'تقديري (شموع)',
+        entry: 2642.50,
+        sl: 2634.00,
+        tp1: 2655.25,
+        tp2: 2668.00,
+        tp3: 2685.00,
+        pipValue: 10,
+        unitLabel: 'Lots',
+        mtf: [
+          { tf: '15m', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '4H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1D', dir: 'محايد+', cls: 'text-cyan-300' },
+        ],
+        scores: { trend: 90, structure: 88, liquidity: 92, orderflow: 75, momentum: 80, mtf: 85, session: 90, rr: 86 },
+        evidenceFor: [
+          'سحب سيولة SSL أسفل قاع آسيا مع إغلاق صاعد',
+          'كسر هيكل BOS صاعد مع فجوة FVG غير مغطاة',
+          'توافق فريمات 15m و1H و4H مع الاتجاه العام',
+          'جلسة تداخل لندن/نيويورك ذات سيولة عالية'
+        ],
+        evidenceAgainst: [
+          'قراءة Order Flow تعتمد على بديل تقديري لا DOM فعلي',
+          'مقاومة يومية قريبة عند 2670 قد تبطئ TP3'
+        ]
+      },
+      'BINANCE:BTCUSDT': {
+        label: 'BTCUSDT (بيتكوين)',
+        direction: 'BUY',
+        state: 'CONFIRMED',
+        regime: 'High Volatility — تقلب مرتفع',
+        structure: 'MSS صاعد + FVG إعادة اختبار',
+        liquidity: 'Sweep لقاع متساوي (89,400)',
+        orderflow: 'دلتا تراكمي إيجابي +71%',
+        orderflowMode: 'فعلي (Bid/Ask)',
+        entry: 90250.0,
+        sl: 89150.0,
+        tp1: 92100.0,
+        tp2: 93800.0,
+        tp3: 95900.0,
+        pipValue: 1,
+        unitLabel: 'BTC',
+        mtf: [
+          { tf: '15m', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '4H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1D', dir: 'صاعد', cls: 'text-emerald-400' },
+        ],
+        scores: { trend: 94, structure: 86, liquidity: 88, orderflow: 84, momentum: 78, mtf: 95, session: 85, rr: 82 },
+        evidenceFor: [
+          'توافق كامل عبر جميع الفريمات (15m إلى 1D)',
+          'امتصاص بيعي واضح عند 89,400 مع ارتفاع الحجم',
+          'إغلاق شمعة تأكيد داخل منطقة Discount'
+        ],
+        evidenceAgainst: [
+          'تقلب ATR مرتفع يتطلب وقف خسارة أوسع',
+          'تمويل العقود الدائمة مرتفع نسبياً'
+        ]
+      },
+      'FX:EURUSD': {
+        label: 'EURUSD (يورو/دولار)',
+        direction: 'SELL',
+        state: 'SETUP',
+        regime: 'Ranging — عرضي داخل نطاق',
+        structure: 'CHOCH هابط في منطقة Premium',
+        liquidity: 'BSL Sweep فوق 1.0620',
+        orderflow: 'ضغط بيع -58% (تقديري)',
+        orderflowMode: 'تقديري (شموع)',
+        entry: 1.0595,
+        sl: 1.0628,
+        tp1: 1.0545,
+        tp2: 1.0510,
+        tp3: 1.0475,
+        pipValue: 100000,
+        unitLabel: 'Lots',
+        mtf: [
+          { tf: '15m', dir: 'هابط', cls: 'text-rose-400' },
+          { tf: '1H', dir: 'عرضي', cls: 'text-amber-300' },
+          { tf: '4H', dir: 'هابط', cls: 'text-rose-400' },
+          { tf: '1D', dir: 'هابط', cls: 'text-rose-400' },
+        ],
+        scores: { trend: 72, structure: 78, liquidity: 85, orderflow: 65, momentum: 68, mtf: 70, session: 80, rr: 78 },
+        evidenceFor: [
+          'سحب سيولة BSL فوق قمة الجلسة الأوروبية',
+          'تشكل CHOCH هابط مع فجوة FVG بيعية',
+          'اتجاه 4H و1D هابط يدعم السيناريو البيعي'
+        ],
+        evidenceAgainst: [
+          'فريم 1H ما زال عرضياً (تعارض جزئي)',
+          'بانتظار إغلاق شمعة التأكيد قبل الدخول'
+        ]
+      },
+      'NASDAQ:NDX': {
+        label: 'NAS100 (ناسداك)',
+        direction: 'BUY',
+        state: 'ENTRY_READY',
+        regime: 'Trending — اتجاهي صاعد',
+        structure: 'BOS صاعد + Breaker Block',
+        liquidity: 'استهداف BSL عند 20,980',
+        orderflow: 'ضغط شراء +69% (تقديري)',
+        orderflowMode: 'تقديري (شموع)',
+        entry: 20740.0,
+        sl: 20655.0,
+        tp1: 20865.0,
+        tp2: 20980.0,
+        tp3: 21120.0,
+        pipValue: 1,
+        unitLabel: 'Contracts',
+        mtf: [
+          { tf: '15m', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '4H', dir: 'صاعد', cls: 'text-emerald-400' },
+          { tf: '1D', dir: 'صاعد', cls: 'text-emerald-400' },
+        ],
+        scores: { trend: 92, structure: 85, liquidity: 82, orderflow: 74, momentum: 86, mtf: 92, session: 90, rr: 84 },
+        evidenceFor: [
+          'افتتاح جلسة نيويورك بزخم شرائي وتوسع ATR',
+          'ثبات السعر فوق VWAP وEMA 50 على 15m',
+          'مساحة سيولة نظيفة نحو 20,980'
+        ],
+        evidenceAgainst: [
+          'تمدد زخم RSI قريب من 68',
+          'حساسية عالية لأي تصريحات فدرالية مفاجئة'
+        ]
+      },
+      'CAPITALCOM:US30': {
+        label: 'US30 (داو جونز)',
+        direction: 'SELL',
+        state: 'WATCH',
+        regime: 'Transition — مرحلة انتقال',
+        structure: 'اختبار Bearish Order Block',
+        liquidity: 'اقتراب من BSL عند 43,650',
+        orderflow: 'توازن نسبي (تقديري)',
+        orderflowMode: 'تقديري (شموع)',
+        entry: 43580.0,
+        sl: 43710.0,
+        tp1: 43380.0,
+        tp2: 43200.0,
+        tp3: 43010.0,
+        pipValue: 1,
+        unitLabel: 'Contracts',
+        mtf: [
+          { tf: '15m', dir: 'عرضي', cls: 'text-amber-300' },
+          { tf: '1H', dir: 'هابط', cls: 'text-rose-400' },
+          { tf: '4H', dir: 'محايد', cls: 'text-slate-300' },
+          { tf: '1D', dir: 'صاعد', cls: 'text-emerald-400' },
+        ],
+        scores: { trend: 55, structure: 64, liquidity: 72, orderflow: 58, momentum: 60, mtf: 50, session: 75, rr: 74 },
+        evidenceFor: [
+          'وصول السعر لمنطقة مقاومة هيكلية وسيولة قمم متساوية'
+        ],
+        evidenceAgainst: [
+          'تعارض حاد بين الفريم اليومي الصاعد وفريم الساعة الهابط',
+          'لم يحدث Sweep أو كسر هيكل مؤكد بعد'
+        ]
+      }
+    };
+
+    const DEFAULT_WEIGHTS = [
+      { key: 'trend', label: 'اتجاه السوق والفريم الأعلى', weight: 15 },
+      { key: 'structure', label: 'بنية السوق والتحول الهيكلي', weight: 15 },
+      { key: 'liquidity', label: 'السيولة وجودة السحب/العودة', weight: 20 },
+      { key: 'orderflow', label: 'تدفق الأوامر أو بديله الموسوم', weight: 15 },
+      { key: 'momentum', label: 'الزخم والتقلب', weight: 10 },
+      { key: 'mtf', label: 'توافق الفريمات (MTF)', weight: 10 },
+      { key: 'session', label: 'الجلسة والأخبار وجودة البيانات', weight: 5 },
+      { key: 'rr', label: 'العائد إلى المخاطرة وجودة التنفيذ', weight: 10 },
+    ];
+
+    const DEFAULT_FILTERS = [
+      { id: 'trend', name: 'Trend Filter', desc: 'الاتجاه العام وقوة الاتجاه', enabled: true, status: 'PASS' },
+      { id: 'volume', name: 'Volume Filter', desc: 'صلاحية الحجم ونشاط السوق', enabled: true, status: 'PASS' },
+      { id: 'volatility', name: 'Volatility Filter', desc: 'تقلب ATR مناسب للاستراتيجية', enabled: true, status: 'PASS' },
+      { id: 'liquidity', name: 'Liquidity Filter', desc: 'وجود مستوى سيولة أو Sweep', enabled: true, status: 'PASS' },
+      { id: 'momentum', name: 'Momentum Filter', desc: 'عدم الدخول بعد تمدد مفرط', enabled: true, status: 'PASS' },
+      { id: 'structure', name: 'Structure Filter', desc: 'تأكيد BOS / CHOCH / MSS', enabled: true, status: 'PASS' },
+      { id: 'session', name: 'Session Filter', desc: 'جلسة تداول نشطة ومناسبة', enabled: true, status: 'PASS' },
+      { id: 'news', name: 'News Filter', desc: 'خارج نافذة الأخبار عالية التأثير', enabled: true, status: 'PASS' },
+      { id: 'spread', name: 'Spread/Slippage Filter', desc: 'تكلفة التنفيذ ضمن الحد المسموح', enabled: true, status: 'PASS' },
+      { id: 'mtf', name: 'MTF Filter', desc: 'اتساق الفريمات المختارة', enabled: true, status: 'PASS' },
+      { id: 'chop', name: 'Chop Filter', desc: 'منع السوق العرضي غير المناسب', enabled: true, status: 'PASS' },
+      { id: 'rr', name: 'Risk/Reward Filter', desc: 'كفاية العائد إلى المخاطرة الصافي', enabled: true, status: 'PASS' },
+      { id: 'data', name: 'Data Quality Filter', desc: 'اكتمال البيانات وحداثتها', enabled: true, status: 'PASS' },
+    ];
+
+    const state = {
+      symbol: 'OANDA:XAUUSD',
+      timeframe: '15',
+      studiesEnabled: true,
+      killSwitch: false,
+      newsBlackout: false,
+      dataFault: false,
+      signalId: 'QF-20261118-0104',
+      activeTab: 'terminal',
+      weights: DEFAULT_WEIGHTS.map(w => ({ ...w })),
+      filters: DEFAULT_FILTERS.map(f => ({ ...f })),
+      risk: {
+        capital: 20000,
+        riskPercent: 1.0,
+        dailyLimit: 3.0,
+        dailyUsed: 0.8,
+        minRR: 2.0,
+        spreadCost: 2.5,
+      },
+      customProfile: null,
+      alerts: [
+        { id: 'AL-104', time: '17:28 UTC', type: 'BUY ENTRY_READY', symbol: 'OANDA:XAUUSD', tf: '15m', reason: 'SSL Sweep + BOS صاعد + توافق MTF', level: 'success' },
+        { id: 'AL-103', time: '17:15 UTC', type: 'LIQUIDITY SWEEP', symbol: 'OANDA:XAUUSD', tf: '15m', reason: 'سحب سيولة أسفل 2636.20 وإغلاق داخل النطاق', level: 'info' },
+        { id: 'AL-102', time: '16:45 UTC', type: 'SELL SETUP', symbol: 'FX:EURUSD', tf: '15m', reason: 'CHOCH هابط في منطقة Premium بانتظار التأكيد', level: 'warn' },
+        { id: 'AL-101', time: '15:30 UTC', type: 'SESSION OPEN', symbol: 'MARKET', tf: 'ALL', reason: 'افتتاح تداخل جلستي لندن ونيويورك', level: 'info' },
+      ],
+      auditLog: [
+        { id: 'QF-20261118-0104', time: '17:28:00', symbol: 'OANDA:XAUUSD', tf: '15m', dir: 'BUY', score: 86, status: 'ENTRY_READY', reason: 'اجتياز جميع بوابات المخاطر والفلاتر (v1.0)' },
+        { id: 'QF-20261118-0103', time: '16:45:00', symbol: 'FX:EURUSD', tf: '15m', dir: 'SELL', score: 75, status: 'SETUP', reason: 'بانتظار إغلاق شمعة التأكيد (No-Repaint)' },
+        { id: 'QF-20261118-0102', time: '14:25:00', symbol: 'NASDAQ:NDX', tf: '5m', dir: 'BUY', score: 82, status: 'BLOCKED', reason: 'بوابة الأخبار: نافذة حظر قبل صدور بيانات أمريكية' },
+        { id: 'QF-20261118-0101', time: '11:10:00', symbol: 'BINANCE:BTCUSDT', tf: '15m', dir: 'BUY', score: 88, status: 'EXITED', reason: 'تحقق TP2 بنجاح (+2.4R صافي بعد التكاليف)' },
+      ]
+    };
+
+    let equityChartInstance = null;
+
+    // ==================== TRADINGVIEW EMBED ENGINE ====================
+    function renderTradingViewChart() {
+      const host = document.getElementById('tradingview-widget-host');
+      if (!host) return;
+      host.innerHTML = '';
+
+      const container = document.createElement('div');
+      container.className = 'tradingview-widget-container';
+      container.style.height = '100%';
+      container.style.width = '100%';
+
+      const widgetDiv = document.createElement('div');
+      widgetDiv.className = 'tradingview-widget-container__widget';
+      widgetDiv.style.height = '100%';
+      widgetDiv.style.width = '100%';
+
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+      script.async = true;
+
+      const config = {
+        autosize: true,
+        symbol: state.symbol,
+        interval: state.timeframe,
+        timezone: 'Etc/UTC',
+        theme: 'dark',
+        style: '1',
+        locale: 'ar_AE',
+        backgroundColor: 'rgba(10, 15, 28, 1)',
+        gridColor: 'rgba(30, 44, 72, 0.35)',
+        allow_symbol_change: true,
+        calendar: false,
+        hide_side_toolbar: false,
+        support_host: 'https://www.tradingview.com',
+        studies: state.studiesEnabled
+          ? ['STD;EMA', 'STD;RSI', 'STD;VWAP']
+          : []
+      };
+
+      script.textContent = JSON.stringify(config);
+      container.appendChild(widgetDiv);
+      container.appendChild(script);
+      host.appendChild(container);
+
+      const tfLabel = { '1': '1m', '5': '5m', '15': '15m', '60': '1H', '240': '4H', 'D': '1D' }[state.timeframe] || state.timeframe;
+      document.getElementById('chart-symbol-label').textContent = `${state.symbol} • ${tfLabel}`;
+    }
+
+    // ==================== CORE QUANT COMPUTATION & GATES ====================
+    function getActiveProfile() {
+      if (state.customProfile && state.customProfile.symbol === state.symbol) {
+        return state.customProfile;
+      }
+      if (ASSET_PROFILES[state.symbol]) {
+        return ASSET_PROFILES[state.symbol];
+      }
+      // Generic profile for any custom TradingView symbol entered by user
+      return {
+        label: state.symbol,
+        direction: 'BUY',
+        state: 'WATCH',
+        regime: 'Monitoring — قيد المراقبة',
+        structure: 'بانتظار إشارة Webhook من TradingView',
+        liquidity: 'يتم تتبع القمم والقيعان المتساوية',
+        orderflow: 'غير متصل بمصدر DOM (تقديري)',
+        orderflowMode: 'تقديري (شموع)',
+        entry: 100.00,
+        sl: 98.50,
+        tp1: 102.25,
+        tp2: 104.50,
+        tp3: 107.00,
+        pipValue: 1,
+        unitLabel: 'Units',
+        mtf: [
+          { tf: '15m', dir: 'محايد', cls: 'text-slate-300' },
+          { tf: '1H', dir: 'محايد', cls: 'text-slate-300' },
+          { tf: '4H', dir: 'محايد', cls: 'text-slate-300' },
+          { tf: '1D', dir: 'محايد', cls: 'text-slate-300' },
+        ],
+        scores: { trend: 60, structure: 60, liquidity: 60, orderflow: 50, momentum: 60, mtf: 60, session: 80, rr: 75 },
+        evidenceFor: ['تم تحميل الشارت المباشر بنجاح من TradingView'],
+        evidenceAgainst: ['بانتظار إرسال تنبيه Webhook JSON لهذا الرمز لتفعيل التحليل الكامل']
+      };
+    }
+
+    function computeMetrics(profile) {
+      // Weighted score calculation
+      let totalWeight = 0;
+      let weightedSum = 0;
+      state.weights.forEach(w => {
+        totalWeight += w.weight;
+        const val = profile.scores[w.key] ?? 60;
+        weightedSum += val * w.weight;
+      });
+      const finalScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+
+      // Net Risk/Reward calculation
+      const riskDist = Math.abs(profile.entry - profile.sl);
+      const rewardDist = Math.abs(profile.tp2 - profile.entry);
+      const rawRR = riskDist > 0 ? rewardDist / riskDist : 0;
+      const riskAmount = Math.max(1, (state.risk.capital * state.risk.riskPercent) / 100);
+      const netCostRatio = state.risk.spreadCost / riskAmount;
+      const netRR = Math.max(0, rawRR - netCostRatio);
+
+      // Position Size
+      let sizeVal = riskDist > 0 ? (riskAmount / (riskDist * (profile.pipValue === 100000 ? 100000 : profile.pipValue === 10 ? 100 : 1))) : 0;
+      if (!Number.isFinite(sizeVal)) sizeVal = 0;
+
+      // Hard No-Trade Gates (Section 5.4)
+      const blockers = [];
+      if (state.killSwitch) blockers.push('تفعيل زر الإيقاف الطارئ (Kill Switch).');
+      if (state.dataFault) blockers.push('انقطاع أو تأخر مصدر البيانات (Data Quality Gate).');
+      if (state.newsBlackout) blockers.push('نافذة حظر الأخبار الاقتصادية عالية التأثير مفعّلة.');
+      if (state.risk.dailyUsed >= state.risk.dailyLimit) {
+        blockers.push(`تجاوز حد الخسارة اليومي (${state.risk.dailyUsed.toFixed(1)}% >= ${state.risk.dailyLimit.toFixed(1)}%).`);
+      }
+      if (netRR < state.risk.minRR) {
+        blockers.push(`العائد/المخاطرة الصافي (1:${netRR.toFixed(2)}) أقل من الحد الأدنى المطلوب (1:${state.risk.minRR.toFixed(1)}).`);
+      }
+
+      // Sync filter statuses with current conditions
+      state.filters.forEach(f => {
+        if (f.id === 'news') f.status = state.newsBlackout ? 'BLOCK' : 'PASS';
+        else if (f.id === 'data') f.status = state.dataFault ? 'BLOCK' : 'PASS';
+        else if (f.id === 'rr') f.status = netRR < state.risk.minRR ? 'BLOCK' : 'PASS';
+        else if (f.id === 'mtf') f.status = (profile.scores.mtf < 60) ? 'WARN' : 'PASS';
+        else if (f.id === 'chop') f.status = profile.regime.includes('Ranging') ? 'WARN' : 'PASS';
+        else f.status = 'PASS';
+
+        if (f.enabled && f.status === 'BLOCK' && !['news', 'data', 'rr'].includes(f.id)) {
+          blockers.push(`الفلتر ${f.name} رفض الإشارة.`);
+        }
+      });
+
+      const isBlocked = blockers.length > 0;
+      const effectiveState = isBlocked ? 'BLOCKED' : profile.state;
+
+      return { finalScore, totalWeight, netRR, riskAmount, sizeVal, blockers, isBlocked, effectiveState };
+    }
+
+    // ==================== UI RENDERERS ====================
+    function formatPrice(val) {
+      if (val < 10) return val.toFixed(4);
+      if (val > 10000) return val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      return val.toFixed(2);
+    }
+
+    function renderAll() {
+      const profile = getActiveProfile();
+      const metrics = computeMetrics(profile);
+
+      // Kill Switch UI
+      const killBanner = document.getElementById('kill-switch-banner');
+      const killBtn = document.getElementById('kill-switch-btn');
+      const killText = document.getElementById('kill-switch-text');
+      if (state.killSwitch) {
+        killBanner.classList.remove('hidden');
+        killBtn.classList.add('bg-rose-600', 'text-white');
+        killText.textContent = 'KILL ACTIVE';
+      } else {
+        killBanner.classList.add('hidden');
+        killBtn.classList.remove('bg-rose-600', 'text-white');
+        killText.textContent = 'Kill Switch';
+      }
+
+      // Data Quality Pill
+      const dqPill = document.getElementById('data-quality-pill');
+      const dqLabel = document.getElementById('data-quality-label');
+      if (state.dataFault) {
+        dqPill.className = 'hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/40';
+        dqLabel.textContent = 'جودة البيانات: منقطعة (وضع آمن)';
+      } else {
+        dqPill.className = 'hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30';
+        dqLabel.textContent = 'جودة البيانات: موثوقة';
+      }
+
+      // Decision Headline & Hard Gate Alert
+      const headlineEl = document.getElementById('decision-headline');
+      const gateAlert = document.getElementById('hard-gate-alert');
+      const gateReasons = document.getElementById('hard-gate-reasons');
+
+      if (metrics.isBlocked) {
+        headlineEl.className = 'text-base sm:text-lg font-extrabold text-rose-400 flex items-center gap-2';
+        headlineEl.innerHTML = `<span>⛔ NO-TRADE GATE — ممنوع التداول</span>`;
+        gateAlert.classList.remove('hidden');
+        gateReasons.textContent = metrics.blockers.join(' • ');
+      } else {
+        gateAlert.classList.add('hidden');
+        const stateLabels = {
+          WATCH: 'مراقبة فقط',
+          SETUP: 'إعداد أولي (بانتظار التأكيد)',
+          CONFIRMED: 'تأكيد مكتمل',
+          ENTRY_READY: 'جاهز للدخول',
+          ACTIVE: 'صفقة نشطة',
+          EXITED: 'خروج مكتمل',
+          INVALIDATED: 'تم إبطال السيناريو'
+        };
+        const isBuy = profile.direction === 'BUY';
+        headlineEl.className = `text-base sm:text-lg font-extrabold flex items-center gap-2 ${profile.state === 'INVALIDATED' ? 'text-slate-400' : isBuy ? 'text-emerald-400' : 'text-rose-400'}`;
+        headlineEl.innerHTML = `<span>${profile.direction} ${profile.state} — ${stateLabels[profile.state] || profile.state}</span>`;
+      }
+
+      document.getElementById('signal-id-display').textContent = state.signalId;
+
+      // State Machine Stepper
+      document.querySelectorAll('#state-machine-bar .state-step').forEach(el => {
+        el.classList.remove('active-step', 'blocked-step');
+        if (metrics.isBlocked && el.dataset.state === 'ENTRY_READY') {
+          el.classList.add('blocked-step');
+        } else if (!metrics.isBlocked && el.dataset.state === profile.state) {
+          el.classList.add('active-step');
+        }
+      });
+
+      // Score Bar & Badge
+      const scoreBadge = document.getElementById('score-badge');
+      const scoreBar = document.getElementById('score-bar');
+      scoreBadge.innerHTML = `${metrics.finalScore}<span class="text-xs text-slate-400">/100</span>`;
+      scoreBadge.className = `font-num text-2xl font-extrabold ${metrics.finalScore >= 75 ? 'text-emerald-400' : metrics.finalScore >= 55 ? 'text-amber-400' : 'text-rose-400'}`;
+      scoreBar.style.width = `${Math.min(100, Math.max(0, metrics.finalScore))}%`;
+
+      // Evidence lists
+      document.getElementById('evidence-for-list').innerHTML = profile.evidenceFor
+        .map(item => `<li class="flex items-start gap-1.5"><span class="text-emerald-400">•</span><span>${item}</span></li>`).join('');
+      document.getElementById('evidence-against-list').innerHTML = profile.evidenceAgainst
+        .map(item => `<li class="flex items-start gap-1.5"><span class="text-rose-400">•</span><span>${item}</span></li>`).join('');
+
+      // MTF Grid
+      document.getElementById('mtf-grid').innerHTML = profile.mtf.map(m => `
+        <div class="p-2 rounded-lg bg-slate-900/90 border border-slate-800">
+          <div class="font-num text-[11px] text-slate-400">${m.tf}</div>
+          <div class="text-xs font-bold mt-1 ${m.cls}">${m.dir}</div>
+        </div>
+      `).join('');
+      const mtfSync = document.getElementById('mtf-sync-status');
+      if (profile.scores.mtf >= 80) {
+        mtfSync.textContent = 'توافق مرتفع';
+        mtfSync.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold';
+      } else if (profile.scores.mtf >= 60) {
+        mtfSync.textContent = 'توافق متوسط';
+        mtfSync.className = 'text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold';
+      } else {
+        mtfSync.textContent = 'تعارض فريمات';
+        mtfSync.className = 'text-[11px] px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold';
+      }
+
+      // Summary cards
+      document.getElementById('summary-regime').textContent = profile.regime;
+      document.getElementById('summary-structure').textContent = profile.structure;
+      document.getElementById('summary-liquidity').textContent = profile.liquidity;
+      document.getElementById('summary-orderflow').textContent = profile.orderflow;
+      document.getElementById('orderflow-mode-badge').textContent = `Order Flow: ${profile.orderflowMode}`;
+
+      // Execution Plan
+      const dirPill = document.getElementById('trade-direction-pill');
+      dirPill.textContent = profile.direction === 'BUY' ? 'LONG / BUY' : 'SHORT / SELL';
+      dirPill.className = profile.direction === 'BUY'
+        ? 'px-2 py-0.5 rounded text-xs font-num font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+        : 'px-2 py-0.5 rounded text-xs font-num font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40';
+
+      document.getElementById('plan-entry').textContent = formatPrice(profile.entry);
+      document.getElementById('plan-sl').textContent = formatPrice(profile.sl);
+      document.getElementById('plan-tp1').textContent = formatPrice(profile.tp1);
+      document.getElementById('plan-tp2').textContent = formatPrice(profile.tp2);
+      document.getElementById('plan-tp3').textContent = formatPrice(profile.tp3);
+      document.getElementById('plan-rr').textContent = `1 : ${metrics.netRR.toFixed(2)}`;
+      document.getElementById('plan-size').textContent = `${metrics.sizeVal.toFixed(2)} ${profile.unitLabel} ($${metrics.riskAmount.toFixed(0)} مخاطرة)`;
+
+      const paperBtn = document.getElementById('simulate-paper-entry-btn');
+      if (metrics.isBlocked) {
+        paperBtn.disabled = true;
+        paperBtn.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700';
+        paperBtn.textContent = 'التنفيذ محظور (بوابة المخاطر)';
+      } else {
+        paperBtn.disabled = false;
+        paperBtn.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-md shadow-emerald-900/40';
+        paperBtn.textContent = 'تسجيل صفقة تجريبية (Paper)';
+      }
+
+      // Risk Tab Status
+      const dailyRatio = state.risk.dailyLimit > 0 ? Math.min(100, (state.risk.dailyUsed / state.risk.dailyLimit) * 100) : 100;
+      document.getElementById('daily-loss-ratio').textContent = `${state.risk.dailyUsed.toFixed(1)}% / ${state.risk.dailyLimit.toFixed(1)}%`;
+      const lossBar = document.getElementById('daily-loss-bar');
+      lossBar.style.width = `${dailyRatio}%`;
+      lossBar.className = `h-full rounded-full transition-all duration-300 ${dailyRatio >= 100 ? 'bg-rose-500' : dailyRatio >= 70 ? 'bg-amber-500' : 'bg-cyan-500'}`;
+
+      const riskPill = document.getElementById('risk-status-pill');
+      if (metrics.isBlocked) {
+        riskPill.textContent = 'تم تفعيل المنع';
+        riskPill.className = 'px-2.5 py-1 rounded text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30';
+      } else {
+        riskPill.textContent = 'ضمن الحدود الآمنة';
+        riskPill.className = 'px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+      }
+
+      renderAlerts();
+      renderEngines(profile, metrics);
+      renderFilters();
+      renderWeights(metrics.totalWeight);
+      renderAuditLog();
+    }
+
+    function renderAlerts() {
+      const feed = document.getElementById('alerts-feed');
+      document.getElementById('alert-count-badge').textContent = state.alerts.length;
+      const styles = {
+        success: 'border-emerald-500/30 bg-emerald-950/20 text-emerald-300',
+        warn: 'border-amber-500/30 bg-amber-950/20 text-amber-300',
+        danger: 'border-rose-500/40 bg-rose-950/30 text-rose-300',
+        info: 'border-cyan-500/30 bg-cyan-950/20 text-cyan-300',
+      };
+      feed.innerHTML = state.alerts.map(a => `
+        <div class="p-2.5 rounded-lg border ${styles[a.level] || styles.info} text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-num font-bold">${a.type}</span>
+            <span class="font-num text-[10px] text-slate-400">${a.time}</span>
+          </div>
+          <div class="text-[11px] text-slate-200 mt-1">${a.reason}</div>
+          <div class="text-[10px] text-slate-400 font-num mt-0.5">${a.symbol} • ${a.tf}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderEngines(profile, metrics) {
+      const engines = [
+        { id: '01', name: 'Market Intelligence', ar: 'تحليل السوق والاتجاه', state: profile.regime, score: profile.scores.trend, mode: 'مباشر (TradingView)', note: 'تصنيف الاتجاه، القوة، والقمم والقيعان' },
+        { id: '02', name: 'Liquidity Intelligence', ar: 'ذكاء السيولة والسحب', state: profile.liquidity, score: profile.scores.liquidity, mode: 'تحليلي هيكلي', note: 'رصد BSL / SSL وحدث Sweep المؤكد' },
+        { id: '03', name: 'Order Flow Intelligence', ar: 'تدفق الأوامر والحجم', state: profile.orderflow, score: profile.scores.orderflow, mode: profile.orderflowMode, note: 'تمييز صريح بين DOM الفعلي والبديل التقديري' },
+        { id: '04', name: 'Smart Money (SMC/ICT)', ar: 'مفاهيم البنية والمؤسسات', state: profile.structure, score: profile.scores.structure, mode: 'قواعد ثابتة', note: 'Order Blocks, FVG, Breaker, Premium/Discount' },
+        { id: '05', name: 'Multi-Timeframe Engine', ar: 'تعدد الفريمات (MTF)', state: `توافق ${profile.scores.mtf}%`, score: profile.scores.mtf, mode: 'شموع مغلقة فقط', note: 'منع تسرب الفريم الأعلى غير المكتمل' },
+        { id: '06', name: 'Technical Intelligence', ar: 'التحليل الفني المساعد', state: 'EMA + VWAP + ATR + RSI', score: profile.scores.momentum, mode: 'وصفي مساعد', note: 'منع تضخيم الأدلة المترابطة' },
+        { id: '07', name: 'News Intelligence', ar: 'ذكاء الأخبار والتقويم', state: state.newsBlackout ? '⛔ نافذة حظر خبر' : 'لا توجد أخبار محظورة', score: state.newsBlackout ? 0 : 95, mode: 'تقويم خارجي', note: 'إيقاف التداول حول الأحداث عالية التأثير' },
+        { id: '08', name: 'Quant Statistical Engine', ar: 'المحرك الكمي الإحصائي', state: 'PF 1.74 | OOS 48.5%', score: 82, mode: 'خارج العينة (OOS)', note: 'معايرة الأداء وWalk-Forward وDrawdown' },
+        { id: '09', name: 'AI Intelligence (اختياري)', ar: 'طبقة التصنيف بالذكاء الاصطناعي', state: 'Model v0.9 (مراقبة)', score: 78, mode: 'خدمة Python خارجية', note: 'محرك المخاطر مستقل وقادر على رفض قراره' },
+      ];
+
+      document.getElementById('engines-grid').innerHTML = engines.map(e => `
+        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 transition flex flex-col justify-between gap-2">
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-num text-[11px] text-cyan-400 font-bold">#${e.id} ${e.name}</span>
+              <span class="font-num text-xs font-bold px-2 py-0.5 rounded bg-slate-800 ${e.score >= 75 ? 'text-emerald-400' : e.score >= 50 ? 'text-amber-300' : 'text-rose-400'}">${e.score}/100</span>
+            </div>
+            <div class="text-sm font-bold text-white mt-0.5">${e.ar}</div>
+            <div class="text-xs text-cyan-200 font-semibold mt-1.5">${e.state}</div>
+          </div>
+          <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <span>${e.note}</span>
+            <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0 mr-2">${e.mode}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderFilters() {
+      const grid = document.getElementById('filters-grid');
+      grid.innerHTML = state.filters.map(f => {
+        const statusBadge = !f.enabled
+          ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">معطّل</span>'
+          : f.status === 'BLOCK'
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40">منع</span>'
+            : f.status === 'WARN'
+              ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40">تحذير</span>'
+              : '<span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">مقبول</span>';
+        return `
+          <label class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-2 cursor-pointer hover:border-slate-700 transition">
+            <div class="flex items-center gap-2.5">
+              <input type="checkbox" data-filter-id="${f.id}" ${f.enabled ? 'checked' : ''} class="filter-toggle w-4 h-4 accent-cyan-500 rounded" />
+              <div>
+                <div class="font-num text-xs font-semibold text-slate-200">${f.name}</div>
+                <div class="text-[11px] text-slate-400">${f.desc}</div>
+              </div>
+            </div>
+            ${statusBadge}
+          </label>
+        `;
+      }).join('');
+
+      grid.querySelectorAll('.filter-toggle').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const id = e.target.dataset.filterId;
+          const target = state.filters.find(x => x.id === id);
+          if (target) {
+            target.enabled = e.target.checked;
+            renderAll();
+          }
+        });
+      });
+    }
+
+    function renderWeights(totalWeight) {
+      document.getElementById('total-weight-display').textContent = totalWeight;
+      const list = document.getElementById('weights-list');
+      list.innerHTML = state.weights.map(w => `
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">${w.label}</span>
+            <span class="font-num font-bold text-cyan-300">${w.weight}%</span>
+          </div>
+          <input type="range" min="0" max="40" step="5" value="${w.weight}" data-weight-key="${w.key}" class="weight-slider w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.weight-slider').forEach(slider => {
+        slider.addEventListener('input', (e) => {
+          const key = e.target.dataset.weightKey;
+          const item = state.weights.find(w => w.key === key);
+          if (item) {
+            item.weight = Number(e.target.value);
+            renderAll();
+          }
+        });
+      });
+    }
+
+    function renderAuditLog() {
+      const filterVal = document.getElementById('log-filter-select').value;
+      const rows = state.auditLog.filter(r => {
+        if (filterVal === 'ALL') return true;
+        if (filterVal === 'ENTRY_READY') return ['ENTRY_READY', 'ACTIVE', 'EXITED'].includes(r.status);
+        return r.status === filterVal;
+      });
+      const tbody = document.getElementById('audit-log-body');
+      tbody.innerHTML = rows.map(r => {
+        const badgeCls = r.status === 'BLOCKED'
+          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+          : r.status === 'INVALIDATED'
+            ? 'bg-slate-700/50 text-slate-300 border-slate-600'
+            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-2.5 px-3 font-num text-cyan-300 font-semibold">${r.id}</td>
+            <td class="py-2.5 px-3 font-num text-slate-400">${r.time}</td>
+            <td class="py-2.5 px-3 font-num text-slate-200">${r.symbol} (${r.tf})</td>
+            <td class="py-2.5 px-3 font-num font-bold ${r.dir === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}">${r.dir}</td>
+            <td class="py-2.5 px-3 font-num font-bold text-white">${r.score}/100</td>
+            <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded border text-[10px] font-num font-semibold ${badgeCls}">${r.status}</span></td>
+            <td class="py-2.5 px-3 text-slate-300">${r.reason}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ==================== CHART.JS EQUITY CURVE ====================
+    function renderEquityChart() {
+      const ctx = document.getElementById('equity-chart');
+      if (!ctx) return;
+      if (equityChartInstance) equityChartInstance.destroy();
+
+      const labels = ['أسبوع 1', 'أسبوع 2', 'أسبوع 3', 'أسبوع 4', 'أسبوع 5', 'أسبوع 6', 'أسبوع 7', 'أسبوع 8', 'أسبوع 9', 'أسبوع 10', 'أسبوع 11', 'أسبوع 12'];
+      const equity = [20000, 20420, 20190, 20880, 21340, 21050, 21790, 22410, 22120, 22950, 23480, 24120];
+
+      equityChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'منحنى رأس المال التجريبي ($)',
+            data: equity,
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34, 211, 238, 0.12)',
+            borderWidth: 2.2,
+            fill: true,
+            tension: 0.32,
+            pointRadius: 3,
+            pointBackgroundColor: '#06b6d4'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { family: 'Cairo' } } }
+          },
+          scales: {
+            x: { ticks: { color: '#94a3b8', font: { family: 'Cairo', size: 11 } }, grid: { color: 'rgba(30,44,72,0.35)' } },
+            y: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 11 } }, grid: { color: 'rgba(30,44,72,0.35)' } }
+          }
+        }
+      });
+    }
+
+    // ==================== PINE SCRIPT V6 & WEBHOOK PRESETS ====================
+    const PINE_SCRIPT_V6 = `//@version=6
+indicator("QUANT FOUNDS — TradingView Connector v1.0", overlay=true, max_labels_count=100)
+
+// --- الإعدادات القابلة للمستخدم ---
+emaFastLen   = input.int(20, "EMA السريع")
+emaSlowLen   = input.int(50, "EMA البطيء")
+atrLen       = input.int(14, "طول ATR")
+swingLen     = input.int(5,  "حساسية القمم والقيعان (Liquidity)")
+requireClose = input.bool(true, "منع إعادة الرسم (إغلاق الشمعة فقط)")
+
+// --- 1. محرك الاتجاه والتقلب ---
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+atrVal  = ta.atr(atrLen)
+trendUp = emaFast > emaSlow and close > emaFast
+trendDn = emaFast < emaSlow and close < emaFast
+
+// --- 2. محرك السيولة (Liquidity Sweep) ---
+prevLow  = ta.lowest(low[1], swingLen)
+prevHigh = ta.highest(high[1], swingLen)
+sslSweep = low < prevLow and close > prevLow
+bslSweep = high > prevHigh and close < prevHigh
+
+// --- 3. محرك القرار (No-Repaint Gate) ---
+isConfirmedBar = requireClose ? barstate.isconfirmed : true
+buySignal  = isConfirmedBar and trendUp and sslSweep
+sellSignal = isConfirmedBar and trendDn and bslSweep
+
+// --- 4. خطة الصفقة (Entry / SL / TP) ---
+longSL  = low - atrVal * 0.5
+longTP1 = close + (close - longSL) * 1.5
+longTP2 = close + (close - longSL) * 2.5
+longTP3 = close + (close - longSL) * 4.0
+
+// --- 5. إرسال حمولة JSON إلى لوحة QUANT FOUNDS ---
+if buySignal
+    payload = '{"token":"QF_SECRET_2026","engine_id":"QF-PINE-v1.0","symbol":"' + syminfo.tickerid + '","timeframe":"' + timeframe.period + '","direction":"BUY","state":"ENTRY_READY","score":86,"entry":' + str.tostring(close) + ',"sl":' + str.tostring(longSL) + ',"tp1":' + str.tostring(longTP1) + ',"tp2":' + str.tostring(longTP2) + ',"tp3":' + str.tostring(longTP3) + ',"source_mode":"estimated_candles","evidence":["SSL Sweep مؤكد","اتجاه صاعد EMA 20/50","إغلاق شمعة بدون إعادة رسم"]}'
+    alert(payload, alert.freq_once_per_bar_close)
+    label.new(bar_index, low, "QF BUY", style=label.style_label_up, color=color.teal, textcolor=color.white)
+
+if sellSignal
+    shortSL  = high + atrVal * 0.5
+    shortTP1 = close - (shortSL - close) * 1.5
+    shortTP2 = close - (shortSL - close) * 2.5
+    shortTP3 = close - (shortSL - close) * 4.0
+    payload = '{"token":"QF_SECRET_2026","engine_id":"QF-PINE-v1.0","symbol":"' + syminfo.tickerid + '","timeframe":"' + timeframe.period + '","direction":"SELL","state":"ENTRY_READY","score":84,"entry":' + str.tostring(close) + ',"sl":' + str.tostring(shortSL) + ',"tp1":' + str.tostring(shortTP1) + ',"tp2":' + str.tostring(shortTP2) + ',"tp3":' + str.tostring(shortTP3) + ',"source_mode":"estimated_candles","evidence":["BSL Sweep مؤكد","اتجاه هابط EMA 20/50","إغلاق شمعة بدون إعادة رسم"]}'
+    alert(payload, alert.freq_once_per_bar_close)
+    label.new(bar_index, high, "QF SELL", style=label.style_label_down, color=color.red, textcolor=color.white)
+
+plot(emaFast, "EMA Fast", color=color.new(color.aqua, 20))
+plot(emaSlow, "EMA Slow", color=color.new(color.orange, 20))`;
+
+    const WEBHOOK_PRESETS = {
+      buy_confirmed: {
+        engine_id: 'QF-PINE-v1.0',
+        symbol: 'OANDA:XAUUSD',
+        timeframe: '15',
+        direction: 'BUY',
+        state: 'ENTRY_READY',
+        score: 89,
+        entry: 2644.80,
+        sl: 2636.20,
+        tp1: 2657.70,
+        tp2: 2670.50,
+        tp3: 2688.00,
+        news_blackout: false,
+        source_mode: 'estimated_candles',
+        evidence: ['SSL Sweep مؤكد على 15m', 'BOS صاعد مع Order Block نشط', 'توافق الفريمات الأعلى 1H و4H']
+      },
+      sell_setup: {
+        engine_id: 'QF-PINE-v1.0',
+        symbol: 'FX:EURUSD',
+        timeframe: '15',
+        direction: 'SELL',
+        state: 'SETUP',
+        score: 76,
+        entry: 1.0598,
+        sl: 1.0630,
+        tp1: 1.0550,
+        tp2: 1.0512,
+        tp3: 1.0470,
+        news_blackout: false,
+        source_mode: 'estimated_candles',
+        evidence: ['BSL Sweep فوق قمة لندن', 'تشكل CHOCH هابط مع FVG', 'بانتظار إغلاق شمعة التأكيد']
+      },
+      news_block: {
+        engine_id: 'QF-PINE-v1.0',
+        symbol: 'NASDAQ:NDX',
+        timeframe: '15',
+        direction: 'BUY',
+        state: 'ENTRY_READY',
+        score: 91,
+        entry: 20755.0,
+        sl: 20670.0,
+        tp1: 20880.0,
+        tp2: 20995.0,
+        tp3: 21140.0,
+        news_blackout: true,
+        source_mode: 'estimated_candles',
+        evidence: ['زخم شرائي قوي ولكن نافذة خبر CPI مفعّلة']
+      },
+      low_rr: {
+        engine_id: 'QF-PINE-v1.0',
+        symbol: 'BINANCE:BTCUSDT',
+        timeframe: '15',
+        direction: 'BUY',
+        state: 'ENTRY_READY',
+        score: 83,
+        entry: 90400.0,
+        sl: 88900.0,
+        tp1: 91100.0,
+        tp2: 91600.0,
+        tp3: 92200.0,
+        news_blackout: false,
+        source_mode: 'actual_bid_ask',
+        evidence: ['دلتا شرائية مرتفعة ولكن المسافة للهدف ضيقة (R:R ضعيف)']
+      }
+    };
+
+    // ==================== UTILITIES (TOAST, CLIPBOARD, CLOCK, CSV) ====================
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-900/95 border-emerald-500/60 text-emerald-100',
+        error: 'bg-rose-900/95 border-rose-500/60 text-rose-100',
+        info: 'bg-slate-900/95 border-cyan-500/60 text-cyan-100',
+      };
+      toast.className = `pointer-events-auto px-3.5 py-2.5 rounded-lg border shadow-xl text-xs font-semibold transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.textContent = msg;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function copyText(text, successMsg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast(successMsg, 'success')).catch(() => fallbackCopy(text, successMsg));
+      } else {
+        fallbackCopy(text, successMsg);
+      }
+    }
+
+    function fallbackCopy(text, successMsg) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg, 'success');
+      } catch (e) {
+        showToast('تعذر النسخ تلقائياً، يرجى النسخ يدوياً', 'error');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function updateClockAndSession() {
+      const now = new Date();
+      const hh = String(now.getUTCHours()).padStart(2, '0');
+      const mm = String(now.getUTCMinutes()).padStart(2, '0');
+      const ss = String(now.getUTCSeconds()).padStart(2, '0');
+      document.getElementById('utc-clock').textContent = `${hh}:${mm}:${ss}`;
+
+      const hour = now.getUTCHours();
+      let sessionText = 'الجلسة: آسيا (سيولة هادئة)';
+      if (hour >= 7 && hour < 12) sessionText = 'الجلسة: لندن (نشاط أوروبي)';
+      else if (hour >= 12 && hour < 16) sessionText = 'الجلسة: تداخل لندن / نيويورك (ذروة السيولة)';
+      else if (hour >= 16 && hour < 21) sessionText = 'الجلسة: نيويورك (نشاط أمريكي)';
+      document.getElementById('session-badge').textContent = sessionText;
+    }
+
+    function exportAuditCSV() {
+      const headers = ['Signal_ID', 'Time_UTC', 'Symbol', 'Timeframe', 'Direction', 'Score', 'Status', 'Reason'];
+      const rows = state.auditLog.map(r => [
+        r.id, r.time, r.symbol, r.tf, r.dir, r.score, r.status, `"${String(r.reason).replace(/"/g, '""')}"`
+      ].join(','));
+      const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QUANT_FOUNDS_Audit_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('تم تصدير سجل الإشارات إلى ملف CSV بنجاح', 'success');
+    }
+
+    // ==================== EVENT WIRING ====================
+    function setupEvents() {
+      // Tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.activeTab = btn.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+          document.getElementById(`tab-${state.activeTab}`).classList.remove('hidden');
+          if (state.activeTab === 'risk-audit') {
+            setTimeout(renderEquityChart, 50);
+          }
+        });
+      });
+
+      // Asset Buttons
+      document.querySelectorAll('.asset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.symbol = btn.dataset.symbol;
+          state.customProfile = null;
+          document.querySelectorAll('.asset-btn').forEach(b => {
+            b.className = 'asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition';
+          });
+          btn.className = 'asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 transition';
+          renderTradingViewChart();
+          renderAll();
+          showToast(`تم تبديل الشارت والتحليل إلى ${state.symbol}`, 'info');
+        });
+      });
+
+      // Custom Symbol Input
+      const loadCustom = () => {
+        const raw = document.getElementById('custom-symbol-input').value.trim().toUpperCase();
+        if (!raw) return;
+        state.symbol = raw;
+        state.customProfile = null;
+        document.querySelectorAll('.asset-btn').forEach(b => {
+          b.className = 'asset-btn px-2.5 py-1 rounded-md text-xs font-num font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition';
+        });
+        renderTradingViewChart();
+        renderAll();
+        showToast(`تم تحميل الرمز المخصص ${raw} على شارت TradingView`, 'success');
+      };
+      document.getElementById('load-custom-symbol-btn').addEventListener('click', loadCustom);
+      document.getElementById('custom-symbol-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loadCustom();
+      });
+
+      // Timeframe Buttons
+      document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.timeframe = btn.dataset.tf;
+          document.querySelectorAll('.tf-btn').forEach(b => {
+            b.className = 'tf-btn px-2 py-1 rounded text-xs font-num bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition';
+          });
+          btn.className = 'tf-btn px-2 py-1 rounded text-xs font-num bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 transition';
+          renderTradingViewChart();
+          renderAll();
+        });
+      });
+
+      // Chart Controls
+      document.getElementById('toggle-studies-btn').addEventListener('click', (e) => {
+        state.studiesEnabled = !state.studiesEnabled;
+        e.target.textContent = `مؤشرات EMA + RSI + VWAP: ${state.studiesEnabled ? 'مفعّلة' : 'معطّلة'}`;
+        renderTradingViewChart();
+      });
+      document.getElementById('reload-chart-btn').addEventListener('click', () => {
+        renderTradingViewChart();
+        showToast('تم إعادة تحميل شارت TradingView', 'info');
+      });
+
+      // Kill Switch
+      const toggleKill = () => {
+        state.killSwitch = !state.killSwitch;
+        if (state.killSwitch) {
+          state.alerts.unshift({
+            id: `AL-${Math.floor(Math.random() * 900 + 100)}`,
+            time: new Date().toISOString().slice(11, 16) + ' UTC',
+            type: 'KILL SWITCH ON',
+            symbol: 'SYSTEM',
+            tf: 'ALL',
+            reason: 'تم تفعيل الإيقاف الطارئ ومنع جميع الصفقات الجديدة',
+            level: 'danger'
+          });
+          showToast('تم تفعيل الإيقاف الطارئ (Kill Switch)', 'error');
+        } else {
+          showToast('تم إيقاف وضع الطوارئ وعودة النظام للمراقبة', 'success');
+        }
+        renderAll();
+      };
+      document.getElementById('kill-switch-btn').addEventListener('click', toggleKill);
+      document.getElementById('banner-disable-kill').addEventListener('click', toggleKill);
+
+      // Paper Entry & Invalidate
+      document.getElementById('simulate-paper-entry-btn').addEventListener('click', () => {
+        const profile = getActiveProfile();
+        const metrics = computeMetrics(profile);
+        if (metrics.isBlocked) return;
+        const newId = `QF-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 899 + 100)}`;
+        state.signalId = newId;
+        state.auditLog.unshift({
+          id: newId,
+          time: new Date().toISOString().slice(11, 19),
+          symbol: state.symbol,
+          tf: state.timeframe,
+          dir: profile.direction,
+          score: metrics.finalScore,
+          status: 'ACTIVE',
+          reason: `دخول تجريبي (Paper) بحجم ${metrics.sizeVal.toFixed(2)} ${profile.unitLabel} — R:R 1:${metrics.netRR.toFixed(2)}`
+        });
+        state.alerts.unshift({
+          id: `AL-${Math.floor(Math.random() * 900 + 100)}`,
+          time: new Date().toISOString().slice(11, 16) + ' UTC',
+          type: `${profile.direction} PAPER ACTIVE`,
+          symbol: state.symbol,
+          tf: state.timeframe,
+          reason: `تسجيل صفقة تجريبية عند ${formatPrice(profile.entry)}`,
+          level: 'success'
+        });
+        renderAll();
+        showToast(`تم تسجيل الصفقة التجريبية ${newId} في السجل`, 'success');
+      });
+
+      document.getElementById('invalidate-signal-btn').addEventListener('click', () => {
+        const profile = getActiveProfile();
+        const metrics = computeMetrics(profile);
+        state.auditLog.unshift({
+          id: state.signalId,
+          time: new Date().toISOString().slice(11, 19),
+          symbol: state.symbol,
+          tf: state.timeframe,
+          dir: profile.direction,
+          score: metrics.finalScore,
+          status: 'INVALIDATED',
+          reason: 'إبطال يدوي للسيناريو قبل التنفيذ'
+        });
+        state.alerts.unshift({
+          id: `AL-${Math.floor(Math.random() * 900 + 100)}`,
+          time: new Date().toISOString().slice(11, 16) + ' UTC',
+          type: 'SIGNAL INVALIDATED',
+          symbol: state.symbol,
+          tf: state.timeframe,
+          reason: `تم إبطال الإشارة ${state.signalId}`,
+          level: 'warn'
+        });
+        renderAll();
+        showToast('تم إبطال الإشارة وتوثيقها في سجل التدقيق', 'info');
+      });
+
+      // Engines Tab toggles
+      document.getElementById('toggle-news-blackout').addEventListener('change', (e) => {
+        state.newsBlackout = e.target.checked;
+        renderAll();
+      });
+      document.getElementById('toggle-data-fault').addEventListener('change', (e) => {
+        state.dataFault = e.target.checked;
+        renderAll();
+      });
+      document.getElementById('reset-filters-btn').addEventListener('click', () => {
+        state.filters = DEFAULT_FILTERS.map(f => ({ ...f }));
+        renderAll();
+        showToast('تمت إعادة الفلاتر للوضع الافتراضي', 'info');
+      });
+      document.getElementById('reset-weights-btn').addEventListener('click', () => {
+        state.weights = DEFAULT_WEIGHTS.map(w => ({ ...w }));
+        renderAll();
+        showToast('تمت إعادة أوزان الدرجة للوضع الافتراضي (100%)', 'info');
+      });
+
+      // Risk inputs
+      ['risk-capital', 'risk-percent', 'risk-daily-limit', 'risk-daily-used', 'risk-min-rr', 'risk-spread-cost'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+          state.risk.capital = Math.max(100, Number(document.getElementById('risk-capital').value) || 100);
+          state.risk.riskPercent = Math.max(0.1, Number(document.getElementById('risk-percent').value) || 0.1);
+          state.risk.dailyLimit = Math.max(0.5, Number(document.getElementById('risk-daily-limit').value) || 0.5);
+          state.risk.dailyUsed = Math.max(0, Number(document.getElementById('risk-daily-used').value) || 0);
+          state.risk.minRR = Math.max(0.5, Number(document.getElementById('risk-min-rr').value) || 1.0);
+          state.risk.spreadCost = Math.max(0, Number(document.getElementById('risk-spread-cost').value) || 0);
+          renderAll();
+        });
+      });
+
+      // Audit Log filter & CSV export
+      document.getElementById('log-filter-select').addEventListener('change', renderAuditLog);
+      document.getElementById('export-csv-btn').addEventListener('click', exportAuditCSV);
+
+      // TradingView Bridge Presets & Injector
+      const jsonInput = document.getElementById('webhook-json-input');
+      jsonInput.value = JSON.stringify(WEBHOOK_PRESETS.buy_confirmed, null, 2);
+
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = WEBHOOK_PRESETS[btn.dataset.preset];
+          if (preset) {
+            jsonInput.value = JSON.stringify(preset, null, 2);
+            showToast('تم تحميل السيناريو في محرر JSON', 'info');
+          }
+        });
+      });
+
+      document.getElementById('inject-webhook-btn').addEventListener('click', () => {
+        try {
+          const payload = JSON.parse(jsonInput.value);
+          if (!payload.symbol || !payload.entry || !payload.sl || !payload.tp2) {
+            showToast('يجب أن يحتوي JSON على الحقول: symbol, entry, sl, tp2', 'error');
+            return;
+          }
+          state.symbol = String(payload.symbol).toUpperCase();
+          if (payload.timeframe) state.timeframe = String(payload.timeframe);
+          state.newsBlackout = Boolean(payload.news_blackout);
+          document.getElementById('toggle-news-blackout').checked = state.newsBlackout;
+
+          const base = ASSET_PROFILES[state.symbol] || getActiveProfile();
+          const scoreNum = Number(payload.score) || 80;
+          state.customProfile = {
+            ...base,
+            symbol: state.symbol,
+            direction: payload.direction === 'SELL' ? 'SELL' : 'BUY',
+            state: payload.state || 'ENTRY_READY',
+            entry: Number(payload.entry),
+            sl: Number(payload.sl),
+            tp1: Number(payload.tp1 || payload.tp2),
+            tp2: Number(payload.tp2),
+            tp3: Number(payload.tp3 || payload.tp2),
+            orderflowMode: payload.source_mode === 'actual_bid_ask' ? 'فعلي (Bid/Ask)' : 'تقديري (شموع)',
+            scores: {
+              trend: scoreNum, structure: scoreNum, liquidity: scoreNum,
+              orderflow: scoreNum, momentum: scoreNum, mtf: scoreNum,
+              session: state.newsBlackout ? 10 : scoreNum, rr: scoreNum
+            },
+            evidenceFor: Array.isArray(payload.evidence) && payload.evidence.length ? payload.evidence : ['تم الاستلام عبر Webhook JSON من TradingView'],
+            evidenceAgainst: state.newsBlackout ? ['نافذة حظر خبر اقتصادي مفعّلة في الحمولة'] : ['تم التحقق عبر محرك المخاطر والفلاتر']
+          };
+
+          const newId = `QF-TV-${Math.floor(Math.random() * 8999 + 1000)}`;
+          state.signalId = newId;
+          const metrics = computeMetrics(state.customProfile);
+
+          state.auditLog.unshift({
+            id: newId,
+            time: new Date().toISOString().slice(11, 19),
+            symbol: state.symbol,
+            tf: state.timeframe,
+            dir: state.customProfile.direction,
+            score: metrics.finalScore,
+            status: metrics.isBlocked ? 'BLOCKED' : state.customProfile.state,
+            reason: metrics.isBlocked ? metrics.blockers.join(' | ') : 'إشارة مستلمة من TradingView Webhook'
+          });
+          state.alerts.unshift({
+            id: `AL-${Math.floor(Math.random() * 900 + 100)}`,
+            time: new Date().toISOString().slice(11, 16) + ' UTC',
+            type: metrics.isBlocked ? 'TV SIGNAL BLOCKED' : `TV ${state.customProfile.direction} ${state.customProfile.state}`,
+            symbol: state.symbol,
+            tf: state.timeframe,
+            reason: metrics.isBlocked ? metrics.blockers[0] : (state.customProfile.evidenceFor[0] || 'Webhook JSON'),
+            level: metrics.isBlocked ? 'danger' : 'success'
+          });
+
+          renderTradingViewChart();
+          renderAll();
+
+          // Switch back to terminal tab so user sees the live result immediately
+          document.querySelector('.tab-btn[data-tab="terminal"]').click();
+          showToast(metrics.isBlocked ? 'تم استلام الإشارة وحظرها بواسطة بوابة المخاطر' : `تم تحديث اللوحة بإشارة TradingView (${state.symbol})`, metrics.isBlocked ? 'error' : 'success');
+        } catch (err) {
+          showToast('خطأ في صيغة JSON — يرجى مراجعة الأقواس والفواصل', 'error');
+        }
+      });
+
+      document.getElementById('copy-json-btn').addEventListener('click', () => {
+        copyText(jsonInput.value, 'تم نسخ حمولة Webhook JSON');
+      });
+
+      // ==================== LIVE WEBHOOK BRIDGE POLLING ====================
+      let bridgeTimer = null;
+      let bridgeConnected = false;
+      let lastRemoteSignalId = null;
+
+      const bridgeUrlInput = document.getElementById('bridge-url-input');
+      const bridgeTokenInput = document.getElementById('bridge-token-input');
+      const bridgeIntervalSelect = document.getElementById('bridge-interval-select');
+      const bridgeStatusPill = document.getElementById('bridge-status-pill');
+      const bridgeConnectBtn = document.getElementById('bridge-connect-btn');
+      const bridgeLastSync = document.getElementById('bridge-last-sync');
+
+      // Load saved bridge settings safely
+      try {
+        const savedUrl = localStorage.getItem('qf_bridge_url');
+        const savedToken = localStorage.getItem('qf_bridge_token');
+        if (savedUrl) bridgeUrlInput.value = savedUrl;
+        if (savedToken) bridgeTokenInput.value = savedToken;
+      } catch (e) {}
+
+      function applyIncomingPayload(payload, sourceLabel) {
+        if (!payload || !payload.symbol || !payload.entry || !payload.sl || !payload.tp2) return false;
+        state.symbol = String(payload.symbol).toUpperCase();
+        if (payload.timeframe) state.timeframe = String(payload.timeframe);
+        state.newsBlackout = Boolean(payload.news_blackout);
+        document.getElementById('toggle-news-blackout').checked = state.newsBlackout;
+
+        const base = ASSET_PROFILES[state.symbol] || getActiveProfile();
+        const scoreNum = Number(payload.score) || 80;
+        state.customProfile = {
+          ...base,
+          symbol: state.symbol,
+          direction: payload.direction === 'SELL' ? 'SELL' : 'BUY',
+          state: payload.state || 'ENTRY_READY',
+          entry: Number(payload.entry),
+          sl: Number(payload.sl),
+          tp1: Number(payload.tp1 || payload.tp2),
+          tp2: Number(payload.tp2),
+          tp3: Number(payload.tp3 || payload.tp2),
+          orderflowMode: payload.source_mode === 'actual_bid_ask' ? 'فعلي (Bid/Ask)' : 'تقديري (شموع)',
+          scores: {
+            trend: scoreNum, structure: scoreNum, liquidity: scoreNum,
+            orderflow: scoreNum, momentum: scoreNum, mtf: scoreNum,
+            session: state.newsBlackout ? 10 : scoreNum, rr: scoreNum
+          },
+          evidenceFor: Array.isArray(payload.evidence) && payload.evidence.length ? payload.evidence : [sourceLabel],
+          evidenceAgainst: state.newsBlackout ? ['نافذة حظر خبر اقتصادي مفعّلة في الحمولة'] : ['تم التحقق عبر محرك المخاطر والفلاتر']
+        };
+
+        const newId = payload.signal_id || `QF-TV-${Math.floor(Math.random() * 8999 + 1000)}`;
+        state.signalId = newId;
+        const metrics = computeMetrics(state.customProfile);
+
+        state.auditLog.unshift({
+          id: newId,
+          time: new Date().toISOString().slice(11, 19),
+          symbol: state.symbol,
+          tf: state.timeframe,
+          dir: state.customProfile.direction,
+          score: metrics.finalScore,
+          status: metrics.isBlocked ? 'BLOCKED' : state.customProfile.state,
+          reason: metrics.isBlocked ? metrics.blockers.join(' | ') : sourceLabel
+        });
+        state.alerts.unshift({
+          id: `AL-${Math.floor(Math.random() * 900 + 100)}`,
+          time: new Date().toISOString().slice(11, 16) + ' UTC',
+          type: metrics.isBlocked ? 'TV SIGNAL BLOCKED' : `TV ${state.customProfile.direction} ${state.customProfile.state}`,
+          symbol: state.symbol,
+          tf: state.timeframe,
+          reason: metrics.isBlocked ? metrics.blockers[0] : (state.customProfile.evidenceFor[0] || sourceLabel),
+          level: metrics.isBlocked ? 'danger' : 'success'
+        });
+
+        renderTradingViewChart();
+        renderAll();
+        return true;
+      }
+
+      function getCleanBridgeUrl() {
+        const raw = bridgeUrlInput.value.trim().replace(/\/+$/, '');
+        if (!raw) return '';
+        if (!raw.startsWith('https://')) {
+          showToast('يجب أن يبدأ رابط الخادم بـ https:// لضمان الاتصال الآمن', 'error');
+          return '';
+        }
+        return raw;
+      }
+
+      async function pollBridgeOnce(isManualTest = false) {
+        const baseUrl = getCleanBridgeUrl();
+        if (!baseUrl) return;
+        const token = bridgeTokenInput.value.trim();
+        try {
+          const res = await fetch(`${baseUrl}/api/signals/latest`, {
+            method: 'GET',
+            headers: token ? { 'X-QF-Token': token } : {}
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const nowStr = new Date().toISOString().slice(11, 19) + ' UTC';
+          bridgeLastSync.textContent = `آخر مزامنة: ${nowStr}`;
+          if (isManualTest) {
+            showToast('تم الاتصال بخادم QUANT FOUNDS بنجاح!', 'success');
+          }
+          if (data && data.latest && data.latest.signal_id && data.latest.signal_id !== lastRemoteSignalId) {
+            lastRemoteSignalId = data.latest.signal_id;
+            applyIncomingPayload(data.latest, 'إشارة حية مستلمة من TradingView Webhook');
+            showToast(`إشارة TradingView حية جديدة: ${data.latest.symbol} (${data.latest.direction})`, 'success');
+          }
+        } catch (err) {
+          bridgeStatusPill.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/40';
+          bridgeStatusPill.textContent = '● تعذر الوصول للخادم — تحقق من الرابط وCORS';
+          if (isManualTest) {
+            showToast('تعذر الاتصال بالخادم — تأكد من تشغيل server.py عبر رابط HTTPS عام', 'error');
+          }
+        }
+      }
+
+      function stopBridge() {
+        if (bridgeTimer) {
+          clearInterval(bridgeTimer);
+          bridgeTimer = null;
+        }
+        bridgeConnected = false;
+        bridgeConnectBtn.textContent = 'تفعيل الربط';
+        bridgeConnectBtn.className = 'flex-1 py-2 px-3 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition';
+        bridgeStatusPill.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+        bridgeStatusPill.textContent = '● غير متصل بالخادم (وضع المحاكاة المحلي)';
+      }
+
+      bridgeConnectBtn.addEventListener('click', () => {
+        if (bridgeConnected) {
+          stopBridge();
+          showToast('تم إيقاف المزامنة التلقائية مع الخادم', 'info');
+          return;
+        }
+        const baseUrl = getCleanBridgeUrl();
+        if (!baseUrl) return;
+        try {
+          localStorage.setItem('qf_bridge_url', baseUrl);
+          localStorage.setItem('qf_bridge_token', bridgeTokenInput.value.trim());
+        } catch (e) {}
+        bridgeConnected = true;
+        bridgeConnectBtn.textContent = 'إيقاف الربط';
+        bridgeConnectBtn.className = 'flex-1 py-2 px-3 rounded-lg font-bold bg-rose-600 hover:bg-rose-500 text-white transition';
+        bridgeStatusPill.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
+        bridgeStatusPill.textContent = '● متصل — يستقبل إشارات TradingView تلقائياً';
+        pollBridgeOnce(true);
+        const ms = Number(bridgeIntervalSelect.value) || 5000;
+        if (bridgeTimer) clearInterval(bridgeTimer);
+        bridgeTimer = setInterval(() => pollBridgeOnce(false), ms);
+      });
+
+      document.getElementById('bridge-test-btn').addEventListener('click', () => {
+        pollBridgeOnce(true);
+      });
+
+      document.getElementById('pine-script-code').textContent = PINE_SCRIPT_V6;
+      document.getElementById('copy-pine-btn').addEventListener('click', () => {
+        copyText(PINE_SCRIPT_V6, 'تم نسخ كود Pine Script v6 بنجاح');
+      });
+    }
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      setupEvents();
+      updateClockAndSession();
+      setInterval(updateClockAndSession, 1000);
+      renderTradingViewChart();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
